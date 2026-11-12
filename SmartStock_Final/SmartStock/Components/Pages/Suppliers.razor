@@ -1,0 +1,47 @@
+@* BLOCK 1. Page settings: address /suppliers, live mode, only for logged-in users, and the service that works with the data *@
+@page "/suppliers"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject IInventoryService Inventory
+<PageTitle>Suppliers · SmartStock</PageTitle>
+@* BLOCK 2. ON THE SITE: title "Suppliers" with the grey text and the "+ Add supplier" button at the top right *@
+<PageHeader Title="Suppliers" Description="Keep supplier contacts and product relationships up to date.">
+    <Actions><button class="btn-primary" @onclick="New">＋ Add supplier</button></Actions>
+</PageHeader>
+@* BLOCK 3. ON THE SITE: the notice bar with "Supplier saved.", "Supplier deleted." or an error from the service *@
+@if (!string.IsNullOrEmpty(message)) { <div class="notice">@message</div> }
+@* BLOCK 4. ON THE SITE: the form panel for a new or an existing supplier. It is hidden until showForm is true.
+   Fields: company name, email, phone, address. Buttons: Save supplier and Cancel *@
+@if (showForm)
+{
+    <section class="panel form-panel"><h2>@(item.Id == 0 ? "New supplier" : "Edit supplier")</h2>
+    <EditForm Model="item" OnValidSubmit="Save"><DataAnnotationsValidator /><ValidationSummary /><div class="form-grid"><label>Company name<InputText @bind-Value="item.Name" /></label><label>Email<InputText @bind-Value="item.Email" /></label><label>Phone<InputText @bind-Value="item.Phone" /></label><label>Address<InputText @bind-Value="item.Address" /></label></div><div class="form-actions"><button class="btn-primary">Save supplier</button><button type="button" class="btn-secondary" @onclick="() => showForm=false">Cancel</button></div></EditForm></section>
+}
+@* BLOCK 5. ON THE SITE: the suppliers table with 5 columns.
+   One row for each supplier: name with the address under it, email, phone,
+   number of products from this supplier, and the Edit button.
+   The Delete button is shown only to Admin *@
+<div class="table-wrap"><table><thead><tr><th>Supplier</th><th>Email</th><th>Phone</th><th>Products</th><th>Actions</th></tr></thead><tbody>
+@foreach(var s in suppliers){<tr><td><b>@s.Name</b><small class="subline">@s.Address</small></td><td>@s.Email</td><td>@s.Phone</td><td>@s.Products.Count</td><td><button class="link-button" @onclick="() => Edit(s)">Edit</button><AuthorizeView Roles="Admin"><button class="link-button danger-text" @onclick="() => Delete(s.Id)">Delete</button></AuthorizeView></td></tr>}
+</tbody></table></div>
+@code {
+    // BLOCK 6. Page data: the list of suppliers, the supplier in the form (item),
+    // the flag "show the form", and the notice text
+    private List<Supplier> suppliers=[];
+    private Supplier item=new();
+    private bool showForm;
+    private string message="";
+    // BLOCK 7. Loading: when the page opens, take all suppliers from the service
+    protected override async Task OnInitializedAsync()=>await Load();
+    private async Task Load()=>suppliers=await Inventory.GetSuppliersAsync();
+    // BLOCK 8. Form buttons: "+ Add supplier" opens an empty form,
+    // "Edit" opens the form with a COPY of the supplier, so Cancel does not change the table
+    private void New(){item=new Supplier();showForm=true;message="";}
+    private void Edit(Supplier s){item=new Supplier{Id=s.Id,Name=s.Name,Email=s.Email,Phone=s.Phone,Address=s.Address};showForm=true;message="";}
+    // BLOCK 9. Save and Delete go through the service.
+    // On success the notice shows the result and the table reloads.
+    // On error the notice shows the service message, for example:
+    // "Assign the supplier's products to another supplier before deleting it."
+    private async Task Save(){try{await Inventory.SaveSupplierAsync(item);showForm=false;message="Supplier saved.";await Load();}catch(Exception ex){message=ex.Message;}}
+    private async Task Delete(int id){try{await Inventory.DeleteSupplierAsync(id);message="Supplier deleted.";await Load();}catch(Exception ex){message=ex.Message;}}
+}

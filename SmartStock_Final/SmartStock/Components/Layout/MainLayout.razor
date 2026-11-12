@@ -1,0 +1,31 @@
+@inherits LayoutComponentBase
+<div class="app-shell">
+    <aside class="sidebar">
+        <a class="brand" href="/"><span class="brand-mark">S</span><span><b>SmartStock</b><small>INVENTORY CONTROL</small></span></a>
+        <div class="nav-caption">WORKSPACE</div>
+        <NavLink href="/" Match="NavLinkMatch.All"><span>⌂</span> Dashboard</NavLink>
+        <NavLink href="/products"><span>▦</span> Products</NavLink>
+        <NavLink href="/categories"><span>◈</span> Categories</NavLink>
+        <NavLink href="/suppliers"><span>♧</span> Suppliers</NavLink>
+        <NavLink href="/transactions"><span>⇄</span> Transactions</NavLink>
+        <div class="sidebar-note"><span class="note-icon">✓</span><b>Stay in control</b><p>Keep your stock accurate and your operations moving.</p></div>
+        <div class="sidebar-footer">SMARTSTOCK · VERSION 2.0</div>
+    </aside>
+    <main class="main-area">
+        <header class="topbar"><div><span class="status-dot"></span> Inventory workspace</div><AuthorizeView>
+                <Authorized>
+                    <div class="profile">
+                        <span class="avatar">@Initial(context.User.Identity?.Name)</span> @context.User.Identity?.Name
+                        <span class="role-tag">@(context.User.IsInRole(Roles.Admin) ? "Admin" : "Operator")</span>
+                        <form method="post" action="/logout"><button class="link-button" type="submit">Sign out</button></form>
+                    </div>
+                </Authorized>
+            </AuthorizeView></header>
+        <section class="content-area">@Body</section>
+    </main>
+</div>
+<div id="blazor-error-ui" data-nosnippet style="display:none">An unexpected error has occurred. <a href="" class="reload">Reload</a><span class="dismiss">✕</span></div>
+
+@code {
+    private static string Initial(string? name) => string.IsNullOrEmpty(name) ? "?" : name[..1].ToUpperInvariant();
+}

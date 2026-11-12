@@ -1,0 +1,19 @@
+@* Reusable badge that shows the stock status of a product.
+   Used on the Dashboard (ShowRemaining = true) and on the Products page. *@
+<span class="pill @CssClass">@Label</span>
+
+@code {
+    [Parameter] public int Quantity { get; set; }
+    [Parameter] public int ReorderLevel { get; set; }
+
+    // When true, a low-stock product shows "N left" instead of "Low stock".
+    [Parameter] public bool ShowRemaining { get; set; }
+
+    private bool IsLow => Quantity <= ReorderLevel;
+
+    private string CssClass => Quantity == 0 ? "danger" : IsLow ? "warning" : "success";
+
+    private string Label => Quantity == 0
+        ? "Out of stock"
+        : IsLow ? (ShowRemaining ? $"{Quantity} left" : "Low stock") : "In stock";
+}

@@ -1,0 +1,50 @@
+@* BLOCK 1. Page settings: address /transactions, live mode, only for logged-in users, and the service that records stock changes *@
+@page "/transactions"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject IInventoryService Inventory
+<PageTitle>Transactions · SmartStock</PageTitle>
+@* BLOCK 2. ON THE SITE: title "Stock transactions" with the grey text under it *@
+<PageHeader Title="Stock transactions" Description="Record incoming stock and outgoing product issues." />
+@* BLOCK 3. ON THE SITE: the notice bar with "Transaction saved and stock quantity updated.",
+   "Select a product." or an error from the service, for example "Not enough stock for this operation." *@
+@if (!string.IsNullOrEmpty(message)) { <div class="notice">@message</div> }
+@* BLOCK 4. ON THE SITE: the white panel "Record a transaction" with the form.
+   Fields: product (the list shows the current stock), type (Stock in or Stock out),
+   quantity, and a note. The Save transaction button runs Submit only if the form is valid *@
+<div class="panel form-panel">
+    <h2>Record a transaction</h2>
+<EditForm Model="form" OnValidSubmit="Submit">
+    <DataAnnotationsValidator /><ValidationSummary />
+    <div class="form-grid">
+<label>Product<InputSelect @bind-Value="form.ProductId"><option value="0">Select product</option>@foreach(var p in products){<option value="@p.Id">@p.Name (@p.Quantity in stock)</option>}</InputSelect></label>
+<label>Transaction type<InputSelect @bind-Value="form.Type"><option value="@TransactionType.StockIn">Stock in</option><option value="@TransactionType.StockOut">Stock out</option></InputSelect></label>
+<label>Quantity<InputNumber @bind-Value="form.Quantity" /></label><label>Note<InputText @bind-Value="form.Note" /></label>
+</div><div class="form-actions"><button class="btn-primary" type="submit">Save transaction</button></div></EditForm></div>
+@* BLOCK 5. ON THE SITE: the history table with 5 columns.
+   One row for each transaction: date and time, product name, a colored pill
+   (green "Stock in" or orange "Stock out"), quantity, and the note *@
+<div class="table-wrap"><table><thead><tr><th>Date</th><th>Product</th><th>Type</th><th>Quantity</th><th>Note</th></tr></thead><tbody>
+@foreach(var t in transactions){<tr><td>@t.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</td><td><b>@t.Product?.Name</b></td><td><span class="pill @(t.Type==TransactionType.StockIn?"success":"warning")">@(t.Type==TransactionType.StockIn?"Stock in":"Stock out")</span></td><td>@t.Quantity</td><td>@t.Note</td></tr>}
+</tbody></table></div>
+@code {
+    // BLOCK 6. Page data: the list of products for the drop-down, the list of past transactions for the table,
+    // the form data (form), and the notice text
+    private List<Product> products=[];
+    private List<StockTransaction> transactions=[];
+    private TransactionForm form=new();
+    private string message="";
+    // BLOCK 7. Loading: when the page opens, take products and the transaction history from the service
+    protected override async Task OnInitializedAsync()=>await Load();
+    private async Task Load(){products=await Inventory.GetProductsAsync();transactions=await Inventory.GetTransactionsAsync();}
+    // BLOCK 8. The main action. Runs when the user presses "Save transaction".
+    // Step 1: if no product is selected, show "Select a product."
+    // Step 2: the service records the transaction. It checks the quantity, changes the stock,
+    //         and saves the history together (here the rule "no negative stock" works).
+    // Step 3: on success, show the notice, clear the form, and reload the lists.
+    // On any error the notice shows the service message.
+    private async Task Submit(){try{if(form.ProductId==0)throw new InvalidOperationException("Select a product.");await Inventory.RecordTransactionAsync(form.ProductId,form.Type,form.Quantity,form.Note);message="Transaction saved and stock quantity updated.";form=new();await Load();}catch(Exception ex){message=ex.Message;}}
+    // BLOCK 9. Small class with the form fields.
+    // Default type is Stock in, default quantity is 1, and the quantity must be from 1 to 1,000,000 (validation rule)
+    private class TransactionForm { public int ProductId{get;set;} public TransactionType Type{get;set;}=TransactionType.StockIn; [System.ComponentModel.DataAnnotations.Range(1,1000000)] public int Quantity{get;set;}=1; public string Note{get;set;}=""; }
+}

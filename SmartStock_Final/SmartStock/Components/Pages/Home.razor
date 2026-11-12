@@ -1,0 +1,84 @@
+@* Address of the page: the home page "/" *@
+@page "/"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject DashboardService Dashboard
+@inject IInventoryService Inventory
+
+<PageTitle>Dashboard · SmartStock</PageTitle>
+@* Title "Dashboard" and the grey text under it *@
+<PageHeader Title="Dashboard" Description="Here is what is happening with your inventory today." />
+@if (stats is null)
+{
+    @* Text shown while the data is loading *@
+    <div class="loading">Loading dashboard…</div>
+}
+else
+{
+    @* Row of four colored cards at the top *@
+    <div class="stats-grid">
+        @* Card 1: number of products (purple icon) *@
+        <div class="stat-card"><span>Total products</span><strong>@stats.ProductCount</strong><small>Unique product records</small><i class="stat-icon purple">▦</i></div>
+        @* Card 2: sum of all quantities (blue icon) *@
+        <div class="stat-card"><span>Total units in stock</span><strong>@stats.UnitsInStock</strong><small>Across all products</small><i class="stat-icon blue">▤</i></div>
+        @* Card 3: money value of the stock in dollars (green icon) *@
+        <div class="stat-card"><span>Stock value</span><strong>@stats.StockValue.ToString("C", CultureInfo.GetCultureInfo("en-US"))</strong><small>Based on current unit prices</small><i class="stat-icon green">$</i></div>
+        @* Card 4: products at or below the reorder level (orange icon) *@
+        <div class="stat-card"><span>Low stock alerts</span><strong>@stats.LowStockCount</strong><small>At or below reorder level</small><i class="stat-icon orange">!</i></div>
+    </div>
+    @* Two white panels under the cards, side by side *@
+    <div class="dashboard-grid">
+        @* LEFT PANEL: "Stock health", three bars with numbers *@
+        <section class="panel">
+            @* Panel title and the grey text under it *@
+            <div class="panel-heading"><div><h2>Stock health</h2><p>Distribution of current inventory</p></div></div>
+            @* Bar 1: products with enough stock (width = percent of all products) *@
+            <div class="health-row"><span><i class="legend healthy"></i>Healthy stock</span><b>@healthy</b></div><div class="bar"><span style="width:@Percent(healthy)%"></span></div>
+            @* Bar 2: products with low stock, but not zero *@
+            <div class="health-row"><span><i class="legend low"></i>Low stock</span><b>@low</b></div><div class="bar lowbar"><span style="width:@Percent(low)%"></span></div>
+            @* Bar 3: products with zero stock *@
+            <div class="health-row"><span><i class="legend empty"></i>Out of stock</span><b>@empty</b></div><div class="bar emptybar"><span style="width:@Percent(empty)%"></span></div>
+        </section>
+        @* RIGHT PANEL: "Low stock alerts", up to 5 products that need restocking *@
+        <section class="panel">
+            @* Panel title and the "View all" link to the products page *@
+            <div class="panel-heading"><div><h2>Low stock alerts</h2><p>Items that may need replenishment</p></div><a href="/products">View all →</a></div>
+            @* One row for each low stock product *@
+            @foreach (var product in lowProducts)
+            {
+                @* Row: round letter icon, name with SKU, and a colored stock badge *@
+                <div class="alert-row"><div class="product-avatar">@product.Name[..1].ToUpper()</div><div class="grow"><b>@product.Name</b><small>@product.SKU</small></div><StockStatusBadge Quantity="product.Quantity" ReorderLevel="product.ReorderLevel" ShowRemaining="true" /></div>
+            }
+            @* Message shown when there are no low stock products *@
+            @if (lowProducts.Count == 0) { <p class="muted">Everything is well stocked.</p> }
+        </section>
+    </div>
+}
+@code {
+    // Numbers for the four top cards (null while loading)
+    private DashboardStats? stats;
+    // All products from the database
+    private List<Product> products = [];
+    // Up to 5 low stock products for the right panel
+    private List<Product> lowProducts = [];
+    // Counters for the three bars of "Stock health"
+    private int healthy, low, empty;
+    // Runs when the page opens: loads the data and calculates the counters
+    protected override async Task OnInitializedAsync()
+    {
+        // Numbers for the four cards
+        stats = await Dashboard.GetStatsAsync();
+        // All products
+        products = await Inventory.GetProductsAsync();
+        // Products with more stock than the reorder level
+        healthy = products.Count(p => p.Quantity > p.ReorderLevel);
+        // Products with some stock, but at or below the reorder level
+        low = products.Count(p => p.Quantity > 0 && p.Quantity <= p.ReorderLevel);
+        // Products with zero stock
+        empty = products.Count(p => p.Quantity == 0);
+        // Low stock products, first 5 only
+        lowProducts = products.Where(p => p.IsLowStock).Take(5).ToList();
+    }
+    // Turns a count into a percent (0 to 100) for the bar width
+    private int Percent(int count) => products.Count == 0 ? 0 : (int)Math.Round(count * 100.0 / products.Count);
+}

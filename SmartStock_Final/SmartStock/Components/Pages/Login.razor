@@ -1,0 +1,74 @@
+@* BLOCK 1. Page settings: address /login, simple layout without the sidebar, needed namespaces, and two services (AuthService checks the password, NavigationManager moves the user to another page) *@
+@page "/login"
+@layout LoginLayout
+@using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@inject AuthService Auth
+@inject NavigationManager Navigation
+
+<PageTitle>Sign in · SmartStock</PageTitle>
+@* BLOCK 2. ON THE SITE: the white login card in the center. It has the logo, the title, the red error notice (only after a wrong login), the form with two fields and the Sign in button, and the hint with demo accounts *@
+<div class="login-card">
+    <span class="brand-mark">S</span>
+    <h1>SmartStock</h1>
+    <p class="muted">Sign in to manage your inventory.</p>
+    @if (error is not null) { <div class="notice">@error</div> }
+    <EditForm Model="Input" FormName="login" OnValidSubmit="SignIn" method="post">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+        <label>User name<InputText @bind-Value="Input.UserName" autocomplete="username" /></label>
+        <label>Password<InputText type="password" @bind-Value="Input.Password" autocomplete="current-password" /></label>
+        <button class="btn-primary" type="submit">Sign in</button>
+    </EditForm>
+    <p class="muted login-hint">Demo accounts: admin / Admin123! (full access) and operator / Operator123! (cannot delete).</p>
+</div>
+
+@code {
+    // BLOCK 3. Page data: HttpContext is the current web request (needed to write the cookie),
+    // Input holds the form fields, error is the text of the red notice.
+    // This page is rendered on the server (no interactive mode), so it can write the login cookie.
+    [CascadingParameter] private HttpContext? HttpContext { get; set; }
+
+    [SupplyParameterFromForm] private LoginInput Input { get; set; } = new();
+
+    private string? error;
+
+    // BLOCK 4. Runs when the user presses "Sign in" and the form is valid.
+    // Step 1: ask AuthService to check the name and password.
+    // Step 2: if they are wrong, show the error and stop.
+    // Step 3: if they are right, create the claims (name and role), write the login cookie,
+    //         and open the Dashboard.
+    private async Task SignIn()
+    {
+        var user = await Auth.ValidateAsync(Input.UserName, Input.Password);
+        if (user is null || HttpContext is null)
+        {
+            error = "Invalid user name or password.";
+            return;
+        }
+
+        // The claims describe the user: name and role. They are stored in the cookie.
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.Name, user.UserName),
+            new(ClaimTypes.Role, user.Role)
+        };
+        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
+
+        Navigation.NavigateTo("/", forceLoad: true);
+    }
+
+    // BLOCK 5. Small class with the two form fields and their rules:
+    // both the user name and the password must not be empty.
+    private class LoginInput
+    {
+        [Required(ErrorMessage = "User name is required.")]
+        public string UserName { get; set; } = "";
+
+        [Required(ErrorMessage = "Password is required.")]
+        public string Password { get; set; } = "";
+    }
+}

@@ -1,0 +1,155 @@
+@* Address of the page: /categories *@
+@page "/categories"
+
+@* Buttons and forms work live, handled by the server *@
+@rendermode InteractiveServer
+
+@* Only logged-in users can open the page *@
+@attribute [Authorize]
+
+@* Gives the page the service that talks to the database *@
+@inject IInventoryService Inventory
+
+@* Browser tab title *@
+<PageTitle>Categories · SmartStock</PageTitle>
+
+@* ON THE SITE: big title "Categories" with the grey text under it,
+   and the "+ Add category" button at the top right *@
+<PageHeader Title="Categories" Description="Organize inventory into clear product groups.">
+    <Actions>
+        <button class="btn-primary" @onclick="New">＋ Add category</button>
+    </Actions>
+</PageHeader>
+
+@* ON THE SITE: the notice bar under the header.
+   Shows "Category saved.", "Category deleted." or an error text *@
+@if (!string.IsNullOrEmpty(message))
+{
+    <div class="notice">@message</div>
+}
+
+@* ON THE SITE: the white form panel that opens after "+ Add category" or "Edit".
+   It is hidden until showForm is true *@
+@if (showForm)
+{
+    <section class="panel form-panel">
+        @* Form title: "New category" or "Edit category" *@
+        <h2>@(item.Id == 0 ? "New category" : "Edit category")</h2>
+
+        @* The form. Save runs only if the data is valid *@
+        <EditForm Model="item" OnValidSubmit="Save">
+            @* Checks the rules from the model, for example "Name is required" *@
+            <DataAnnotationsValidator />
+            @* Red list of validation errors above the fields *@
+            <ValidationSummary />
+
+            @* The two input fields: Name and Description *@
+            <div class="form-grid">
+                <label>Name <InputText @bind-Value="item.Name" /></label>
+                <label>Description <InputText @bind-Value="item.Description" /></label>
+            </div>
+
+            @* Buttons under the fields: Save and Cancel (Cancel only hides the form) *@
+            <div class="form-actions">
+                <button class="btn-primary">Save</button>
+                <button type="button" class="btn-secondary" @onclick="() => showForm = false">Cancel</button>
+            </div>
+        </EditForm>
+    </section>
+}
+
+@* ON THE SITE: the grid with category cards, one card for each category *@
+<div class="cards-grid">
+    @foreach (var c in categories)
+    {
+        <article class="panel category-card">
+            @* Small icon at the top of the card *@
+            <div class="category-icon">◈</div>
+            @* Category name and description *@
+            <h2>@c.Name</h2>
+            <p>@c.Description</p>
+            @* Text like "5 products": how many products are in this category *@
+            <div class="category-meta">@c.Products.Count products</div>
+
+            @* Links at the bottom of the card *@
+            <div class="card-actions">
+                @* "Edit" opens the form with this category *@
+                <button class="link-button" @onclick="() => Edit(c)">Edit</button>
+
+                @* "Delete" (red text). Only Admin sees it, Operator does not *@
+                <AuthorizeView Roles="Admin">
+                    <button class="link-button danger-text" @onclick="() => Delete(c.Id)">Delete</button>
+                </AuthorizeView>
+            </div>
+        </article>
+    }
+</div>
+
+@code {
+    // The list shown as cards on the page
+    private List<Category> categories = [];
+    // The category that is now in the form (new or being edited)
+    private Category item = new();
+    // true = the form panel is visible
+    private bool showForm;
+    // The text of the notice bar
+    private string message = "";
+
+    // Runs when the page opens: fills the cards
+    protected override async Task OnInitializedAsync() => await Load();
+
+    // Takes all categories from the database through the service
+    private async Task Load() => categories = await Inventory.GetCategoriesAsync();
+
+    // Button "+ Add category": opens an empty form
+    private void New()
+    {
+        item = new Category();
+        showForm = true;
+        message = "";
+    }
+
+    // Link "Edit" on a card: opens the form with a COPY of the category,
+    // so Cancel does not change the card
+    private void Edit(Category c)
+    {
+        item = new Category { Id = c.Id, Name = c.Name, Description = c.Description };
+        showForm = true;
+        message = "";
+    }
+
+    // Button "Save": the service checks and saves.
+    // On success: form closes, notice "Category saved.", cards refresh.
+    // On error: the error text appears in the notice bar
+    private async Task Save()
+    {
+        try
+        {
+            await Inventory.SaveCategoryAsync(item);
+            showForm = false;
+            message = "Category saved.";
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+    }
+
+    // Link "Delete": the service deletes the category.
+    // If the category still has products, the service refuses and the notice shows:
+    // "Move or remove products in this category before deleting it."
+    private async Task Delete(int id)
+    {
+        try
+        {
+            await Inventory.DeleteCategoryAsync(id);
+            message = "Category deleted.";
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+    }
+}
